@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Douze — jeu de cartes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#dfeae4; --surface:#f7fbf8; --line:#c4d7ce; --ink:#12302a; --muted:#56706a;
+  --accent:#0f7a6c; --accent-ink:#ffffff; --back:#154a42; --back2:#1d5e55; --glow:#f2b632; --danger:#c2453c;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0c1b19; --surface:#142b27; --line:#24423c; --ink:#e2f1ec; --muted:#8eb0a8;
+    --accent:#36c2ab; --accent-ink:#06211c; --back:#0f3a34; --back2:#18524a; --glow:#f5c24a; --danger:#ef7a70;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0c1b19; --surface:#142b27; --line:#24423c; --ink:#e2f1ec; --muted:#8eb0a8;
+  --accent:#36c2ab; --accent-ink:#06211c; --back:#0f3a34; --back2:#18524a; --glow:#f5c24a; --danger:#ef7a70;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-tap-highlight-color:transparent;font-size:16px;line-height:1.45}
+button{font:inherit;color:inherit}
+.btn{border:2px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 18px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:focus-visible,input:focus-visible,.card:focus-visible{outline:3px solid var(--glow);outline-offset:2px}
+input{font:inherit;color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:12px 14px;width:100%}
+
+/* Accueil */
+.home{max-width:420px;margin:0 auto;padding:40px 22px 30px;display:flex;flex-direction:column;gap:14px}
+.logo{font-family:Fredoka,system-ui,sans-serif;font-weight:700;font-size:64px;line-height:1;margin:0;letter-spacing:-1px;display:flex;gap:6px;align-items:flex-end}
+.logo .mini{display:inline-grid;grid-template-columns:repeat(4,10px);gap:3px;margin-left:8px;margin-bottom:10px}
+.logo .mini i{width:10px;height:14px;border-radius:3px;display:block}
+.tag{margin:0 0 6px;color:var(--muted)}
+.fld span{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+.or{text-align:center;color:var(--muted);font-size:14px}
+.join{display:flex;gap:10px}
+.join input{text-transform:uppercase;letter-spacing:4px;font-family:Fredoka,system-ui,sans-serif;font-weight:600}
+.err{color:var(--danger);min-height:1.4em;margin:0}
+.rules{border-top:2px solid var(--line);padding-top:12px;color:var(--muted);font-size:15px}
+.rules summary{cursor:pointer;color:var(--ink);font-weight:600}
+.rules p{margin:8px 0}
+
+/* Barre */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg);border-bottom:2px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.bar .code{font-family:Fredoka,system-ui,sans-serif;font-weight:600;letter-spacing:2px}
+.bar .grow{flex:1}
+.bar .small{font-size:14px;color:var(--muted)}
+.iconbtn{border:none;background:none;padding:6px 8px;font-size:15px;color:var(--muted);cursor:pointer;border-radius:10px}
+
+/* Lobby */
+.lobby{max-width:420px;margin:0 auto;padding:28px 22px;display:flex;flex-direction:column;gap:14px;text-align:center}
+.bigcode{font-family:Fredoka,system-ui,sans-serif;font-weight:700;font-size:58px;letter-spacing:10px;line-height:1}
+.plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;text-align:left}
+.plist li{background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;justify-content:space-between}
+.plist .you{color:var(--muted);font-size:14px}
+.muted{color:var(--muted)}
+
+/* Cartes */
+.card{--w:60px;width:var(--w);aspect-ratio:5/7;border-radius:calc(var(--w)*.16);display:grid;place-items:center;
+  font-family:Fredoka,system-ui,sans-serif;font-weight:700;font-size:calc(var(--w)*.44);color:#fff;position:relative;
+  border:2px solid rgba(255,255,255,.28);box-shadow:0 2px 0 rgba(0,0,0,.2);user-select:none;-webkit-user-select:none;padding:0}
+.card.back{background:repeating-linear-gradient(135deg,var(--back) 0 5px,var(--back2) 5px 10px);border-color:rgba(255,255,255,.18)}
+.card.empty{background:transparent;border:2px dashed var(--line);box-shadow:none}
+.card.v-neg{background:#5a3ea6}
+.card.v-zero{background:#3a8cd3}
+.card.v-low{background:#2c9a58}
+.card.v-mid{background:#e2a623;color:#2a1c00}
+.card.v-high{background:#d4493f}
+.card.tap{cursor:pointer;box-shadow:0 0 0 3px var(--glow),0 2px 0 rgba(0,0,0,.2)}
+.card.tap:active{transform:translateY(1px)}
+.card.fresh{animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.85)}to{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.card.fresh{animation:none}}
+.card .cnt{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:12px;color:var(--muted);font-family:system-ui,sans-serif;font-weight:500}
+
+/* Adversaires */
+.opps{display:flex;gap:10px;overflow-x:auto;padding:12px 14px 4px;scroll-snap-type:x mandatory}
+.opp{flex:0 0 auto;scroll-snap-align:start;background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:8px 10px}
+.opp.active{border-color:var(--glow)}
+.opp .nm{font-size:13px;font-weight:600;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opp .sc{font-size:12px;color:var(--muted);margin-bottom:6px}
+.ogrid{display:grid;grid-template-columns:repeat(4,auto);gap:3px}
+.ogrid .card{--w:22px;border-width:1px;box-shadow:none;font-size:11px}
+
+/* Centre */
+.center{display:flex;justify-content:center;align-items:flex-start;gap:18px;padding:16px 14px 26px}
+.pile{display:flex;flex-direction:column;align-items:center;gap:6px}
+.pile .lbl{font-size:13px;color:var(--muted)}
+.center .card{--w:min(17vw,66px)}
+.hint{text-align:center;margin:0 18px 10px;font-weight:600;min-height:1.5em}
+.hint.wait{font-weight:400;color:var(--muted)}
+.banner{margin:0 14px 10px;padding:8px 12px;border-radius:12px;background:var(--glow);color:#2a1c00;text-align:center;font-weight:600;font-size:15px}
+
+/* Ma grille */
+.mine{padding:4px 14px 28px;display:flex;flex-direction:column;align-items:center}
+.mine .head{display:flex;justify-content:space-between;width:100%;max-width:360px;font-size:14px;color:var(--muted);margin-bottom:8px}
+.mine .head b{color:var(--ink)}
+.mgrid{display:grid;grid-template-columns:repeat(4,auto);gap:8px}
+.mgrid .card{--w:min(19vw,78px)}
+.mine.myturn .head b::after{content:" · à toi";color:var(--accent)}
+
+/* Scores */
+.sheet{margin:6px 14px 30px;background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:16px}
+.sheet h2{font-family:Fredoka,system-ui,sans-serif;font-weight:600;margin:0 0 10px;font-size:24px}
+.sheet table{width:100%;border-collapse:collapse;font-size:15px}
+.sheet th,.sheet td{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line)}
+.sheet th:first-child,.sheet td:first-child{text-align:left}
+.sheet th{color:var(--muted);font-weight:500;font-size:13px}
+.sheet tr.win td{font-weight:700}
+.sheet .note{font-size:14px;color:var(--muted);margin:10px 0}
+.sheet .btn{width:100%;margin-top:6px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:20;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script>
+(function(){
+const app = document.getElementById('app');
+const LS = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PREFIX = 'douze-v1-';
+
+let myId = LS.get('douze-id');
+if(!myId){ myId = 'p' + Math.random().toString(36).slice(2,12); LS.set('douze-id', myId); }
+let myName = LS.get('douze-name') || '';
+
+let peer = null, isHost = false, S = null, code = null, homeMsg = '';
+let conns = new Map();          // hôte : connexion -> id joueur
+let conn = null, retryT = null, gotState = false, joinTimer = null; // client
+let lastSeen = {};
+
+/* ---------- Règles ---------- */
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function newDeck(){
+  const d=[];
+  for(let i=0;i<5;i++) d.push(-2);
+  for(let i=0;i<10;i++) d.push(-1);
+  for(let i=0;i<15;i++) d.push(0);
+  for(let v=1;v<=12;v++) for(let i=0;i<10;i++) d.push(v);
+  return shuffle(d);
+}
+function mkPlayer(id,name){ return {id, name, grid:[], total:0, rounds:[]}; }
+function newGame(c,name){
+  return {code:c, status:'lobby', round:0, players:[mkPlayer(myId,name)], deck:[], discard:[],
+    turn:0, phase:null, drawn:null, finisher:null, lastLeft:0, nextStarter:null, log:'', lastScores:null, doubled:null, v:0};
+}
+function deal(s){
+  s.deck = newDeck();
+  s.players.forEach(p => { p.grid = Array.from({length:12}, () => ({v:s.deck.pop(), up:false, gone:false})); });
+  s.discard = [s.deck.pop()];
+  s.status = 'setup'; s.phase = null; s.drawn = null; s.finisher = null; s.lastLeft = 0;
+  s.round = (s.round||0) + 1; s.log = ''; s.lastScores = null; s.doubled = null;
+}
+function drawFromDeck(s){
+  if(!s.deck.length){ const top = s.discard.pop(); s.deck = shuffle(s.discard); s.discard = [top]; }
+  return s.deck.pop();
+}
+function visibleSum(p){ return p.grid.reduce((a,c)=> a + (c.up && !c.gone ? c.v : 0), 0); }
+function upCount(p){ return p.grid.filter(c=>c.up && !c.gone).length; }
+function clearColumns(p,s){
+  for(let c=0;c<4;c++){
+    const cells=[p.grid[c],p.grid[c+4],p.grid[c+8]];
+    if(cells.every(x=>x.up && !x.gone) && cells[0].v===cells[1].v && cells[1].v===cells[2].v){
+      cells.forEach(x=>{ x.gone=true; s.discard.push(x.v); });
+      s.log = p.name + ' élimine une colonne de ' + cells[0].v + '.';
+    }
+  }
+}
+function endTurn(s){
+  const p = s.players[s.turn];
+  clearColumns(p,s);
+  const allUp = p.grid.every(c=>c.gone || c.up);
+  if(s.finisher==null){
+    if(allUp){ s.finisher = s.turn; s.lastLeft = s.players.length - 1; s.log = p.name + ' a tout retourné : dernier tour pour les autres.'; }
+  } else s.lastLeft--;
+  s.drawn = null;
+  if(s.finisher!=null && s.lastLeft<=0){ endRound(s); return; }
+  s.turn = (s.turn + 1) % s.players.length;
+  s.phase = 'choose';
+}
+function endRound(s){
+  s.players.forEach(p => { p.grid.forEach(c => { if(!c.gone) c.up = true; }); clearColumns(p,s); });
+  const scores = s.players.map(p => p.grid.reduce((a,c)=> a + (c.gone?0:c.v), 0));
+  const f = s.finisher;
+  s.doubled = null;
+  if(scores[f] > 0 && scores.some((x,i)=> i!==f && x<=scores[f])){ scores[f] *= 2; s.doubled = f; }
+  s.players.forEach((p,i) => { p.rounds.push(scores[i]); p.total += scores[i]; });
+  s.lastScores = scores; s.nextStarter = f; s.phase = null; s.drawn = null;
+  s.status = s.players.some(p=>p.total>=100) ? 'over' : 'roundEnd';
+}
+function startPlayIfReady(s){
+  if(!s.players.every(p=>upCount(p)>=2)) return;
+  let start = s.nextStarter;
+  if(start==null || start>=s.players.length){
+    let best=-Infinity; start=0;
+    s.players.forEach((p,i)=>{ const v=visibleSum(p); if(v>best){ best=v; start=i; } });
+  }
+  s.status='playing'; s.turn=start; s.phase='choose';
+  s.log = s.players[start].name + ' commence.';
+}
+// Applique l'action du joueur d'index me. Renvoie false si refusée.
+function applyAction(s, me, a, i){
+  switch(a){
+    case 'start': if(s.status!=='lobby' || s.players.length<2) return false; deal(s); return true;
+    case 'next': if(s.status!=='roundEnd') return false; deal(s); return true;
+    case 'replay': if(s.status!=='over') return false; s.players.forEach(p=>{p.total=0;p.rounds=[];}); s.round=0; s.nextStarter=null; deal(s); return true;
+    case 'card': {
+      const p = s.players[me]; const c = p.grid[i]; if(!c || c.gone) return false;
+      if(s.status==='setup'){ if(c.up || upCount(p)>=2) return false; c.up = true; startPlayIfReady(s); return true; }
+      if(s.status!=='playing' || s.turn!==me) return false;
+      if(s.phase==='drawn' || s.phase==='fromDiscard'){
+        const old = c.v; p.grid[i] = {v:s.drawn, up:true, gone:false}; s.discard.push(old);
+        s.log = p.name + ' pose un ' + s.drawn + ' et défausse un ' + old + '.';
+        endTurn(s); return true;
+      }
+      if(s.phase==='mustFlip'){ if(c.up) return false; c.up = true; s.log = p.name + ' jette sa pioche et retourne un ' + c.v + '.'; endTurn(s); return true; }
+      return false;
+    }
+    case 'deck':
+      if(s.status!=='playing' || s.turn!==me || s.phase!=='choose') return false;
+      s.drawn = drawFromDeck(s); s.phase='drawn'; return true;
+    case 'discard':
+      if(s.status!=='playing' || s.turn!==me) return false;
+      if(s.phase==='choose'){ if(!s.discard.length) return false; s.drawn = s.discard.pop(); s.phase='fromDiscard'; return true; }
+      if(s.phase==='drawn'){
+        s.discard.push(s.drawn); s.drawn=null;
+        if(s.players[me].grid.some(c=>!c.up && !c.gone)) s.phase='mustFlip'; else endTurn(s);
+        return true;
+      }
+      if(s.phase==='fromDiscard'){ s.discard.push(s.drawn); s.drawn=null; s.phase='choose'; return true; }
+      return false;
+  }
+  return false;
+}
+
+/* ---------- Réseau : hôte ---------- */
+function publicState(){ const p = Object.assign({}, S); p.deckCount = S.deck.length; delete p.deck; return p; }
+function broadcast(){
+  const msg = {t:'state', s:publicState()};
+  conns.forEach((pid,c) => { if(c.open) try{ c.send(msg); }catch(e){} });
+}
+function saveHost(){ LS.set('douze-host', JSON.stringify(S)); }
+function commit(){ S.v = (S.v||0)+1; saveHost(); broadcast(); onState(S); }
+function hostAction(pid, a, i){
+  const me = S.players.findIndex(p=>p.id===pid); if(me<0) return;
+  const s = JSON.parse(JSON.stringify(S));
+  if(applyAction(s, me, a, i) === false) return;
+  S = s; commit();
+}
+function onHostData(c, d){
+  if(!d || typeof d!=='object') return;
+  if(d.t==='hello'){
+    const pid = String(d.pid||'').slice(0,40), name = String(d.name||'Joueur').slice(0,14);
+    if(!pid) return;
+    let p = S.players.find(x=>x.id===pid);
+    if(!p){
+      if(S.status!=='lobby'){ c.send({t:'err', m:'Cette partie a déjà commencé.'}); setTimeout(()=>c.close(),500); return; }
+      if(S.players.length>=8){ c.send({t:'err', m:'Partie complète (8 joueurs).'}); setTimeout(()=>c.close(),500); return; }
+      S.players.push(mkPlayer(pid,name));
+    }
+    conns.set(c, pid);
+    commit();
+    return;
+  }
+  const pid = conns.get(c); if(!pid) return;
+  if(d.t==='act') hostAction(pid, String(d.a), d.i==null?null:+d.i);
+  if(d.t==='leave' && S.status==='lobby'){ S.players = S.players.filter(p=>p.id!==pid); conns.delete(c); commit(); }
+}
+function startHost(c, restored, tries){
+  tries = tries||0;
+  isHost = true; code = c;
+  if(!restored) S = newGame(c, myName);
+  else S = restored;
+  saveHost();
+  showLoading('Ouverture de la partie…');
+  peer = new Peer(PREFIX + c.toLowerCase(), {debug:0});
+  peer.on('open', () => { onState(S); });
+  peer.on('connection', cn => {
+    cn.on('data', d => onHostData(cn, d));
+    cn.on('close', () => { conns.delete(cn); });
+    cn.on('error', () => { conns.delete(cn); });
+  });
+  peer.on('disconnected', () => { try{ peer.reconnect(); }catch(e){} });
+  peer.on('error', e => {
+    if(e.type==='unavailable-id'){
+      try{ peer.destroy(); }catch(x){}
+      if(!restored){ startHost(genCode(), null, 0); return; }
+      if(tries<12){ showLoading('Reprise de la partie… (' + (tries+1) + ')'); setTimeout(()=>startHost(c, S, tries+1), 3000); return; }
+      leave('Impossible de reprendre la partie. Crée-en une nouvelle.'); return;
+    }
+    if(e.type==='network' || e.type==='server-error' || e.type==='socket-error' || e.type==='socket-closed'){ toast('Connexion instable, nouvelle tentative…'); setTimeout(()=>{ try{ peer.reconnect(); }catch(x){} }, 2000); return; }
+    if(e.type==='browser-incompatible'){ leave('Ce navigateur ne permet pas de jouer en ligne.'); return; }
+  });
+}
+
+/* ---------- Réseau : client ---------- */
+function startClient(c){
+  isHost = false; code = c; gotState = false;
+  LS.set('douze-client', c);
+  showLoading('Connexion à la partie ' + c + '…');
+  peer = new Peer({debug:0});
+  peer.on('open', connectHost);
+  peer.on('disconnected', () => { try{ peer.reconnect(); }catch(e){} });
+  peer.on('error', e => {
+    if(e.type==='peer-unavailable'){
+      if(!gotState){ leave('Aucune partie ouverte avec ce code. Vérifie le code, et que l’hôte a bien la page ouverte.'); return; }
+      scheduleRetry(); return;
+    }
+    if(e.type==='browser-incompatible'){ leave('Ce navigateur ne permet pas de jouer en ligne.'); return; }
+    scheduleRetry();
+  });
+  clearTimeout(joinTimer);
+  joinTimer = setTimeout(() => { if(!gotState && code===c) leave('L’hôte ne répond pas. Vérifie le code et réessaie.'); }, 15000);
+}
+function connectHost(){
+  if(!peer || peer.destroyed || isHost) return;
+  if(conn){ try{ conn.close(); }catch(e){} }
+  conn = peer.connect(PREFIX + code.toLowerCase(), {reliable:true});
+  conn.on('open', () => { conn.send({t:'hello', pid:myId, name:myName}); });
+  conn.on('data', d => {
+    if(!d) return;
+    if(d.t==='state'){ gotState = true; clearTimeout(joinTimer); onState(d.s); }
+    if(d.t==='err'){ leave(d.m); }
+    if(d.t==='closed'){ leave('L’hôte a fermé la partie.'); }
+  });
+  conn.on('close', scheduleRetry);
+  conn.on('error', scheduleRetry);
+}
+function scheduleRetry(){
+  if(isHost || !code || !gotState) return;
+  clearTimeout(retryT);
+  setBanner('Connexion perdue avec l’hôte, reconnexion…');
+  retryT = setTimeout(() => {
+    if(peer && peer.disconnected && !peer.destroyed){ try{ peer.reconnect(); }catch(e){} }
+    connectHost();
+  }, 2500);
+}
+
+/* ---------- Actions locales ---------- */
+function sendAction(a, i){
+  if(!S) return;
+  if(isHost) return hostAction(myId, a, i);
+  if(conn && conn.open) conn.send({t:'act', a, i});
+  else toast('Pas connecté à l’hôte, patiente un instant.');
+}
+function genCode(){ const L='ABCDEFGHJKLMNPQRSTUVWXYZ'; let c=''; for(let i=0;i<4;i++) c+=L[Math.floor(Math.random()*L.length)]; return c; }
+function createGame(){ if(!readName()) return; startHost(genCode(), null, 0); }
+function joinGame(){
+  if(!readName()) return;
+  const c = (document.getElementById('codeIn').value||'').trim().toUpperCase();
+  if(!/^[A-Z]{4}$/.test(c)) return showErr('Le code fait 4 lettres.');
+  startClient(c);
+}
+function leave(msg){
+  clearTimeout(retryT); clearTimeout(joinTimer);
+  if(isHost && conns.size){ conns.forEach((pid,c)=>{ try{ c.send({t:'closed'}); }catch(e){} }); }
+  setTimeout(() => { try{ peer && peer.destroy(); }catch(e){} peer=null; }, isHost ? 300 : 0);
+  if(isHost) LS.del('douze-host'); else LS.del('douze-client');
+  conns = new Map(); conn = null; S = null; code = null; isHost = false; gotState = false; lastSeen = {};
+  homeMsg = msg || '';
+  renderHome();
+}
+
+/* ---------- Affichage ---------- */
+function cls(v){ return v<0?'v-neg':v===0?'v-zero':v<=4?'v-low':v<=8?'v-mid':'v-high'; }
+const COL = {'v-neg':'#5a3ea6','v-zero':'#3a8cd3','v-low':'#2c9a58','v-mid':'#e2a623','v-high':'#d4493f'};
+function cardHTML(c, o){
+  o = o||{};
+  const tap = o.tap ? ' tap' : '';
+  const attrs = o.act ? ` data-act="${o.act}"${o.i!=null?` data-i="${o.i}"`:''}` : '';
+  const open = o.tap ? `<button type="button" class="card` : `<div class="card`;
+  const close = o.tap ? `</button>` : `</div>`;
+  const label = o.label ? ` aria-label="${esc(o.label)}"` : '';
+  if(!c) return `${open} empty${tap}"${attrs}${label}>${close}`;
+  if(c.gone) return `<div class="card empty"></div>`;
+  if(!c.up) return `${open} back${tap}"${attrs}${label||' aria-label="Carte cachée"'}>${close}`;
+  return `${open} ${cls(c.v)}${tap}${o.fresh?' fresh':''}"${attrs} aria-label="Carte ${c.v}">${c.v}${close}`;
+}
+function showLoading(m){ app.innerHTML = `<main class="lobby"><p class="muted">${esc(m)}</p><button class="btn" data-act="cancel">Annuler</button></main>`; }
+function setBanner(m){ const b=document.getElementById('netb'); if(b){ b.textContent=m; b.hidden=!m; } }
+function renderHome(){
+  const dots = [-2,0,3,6,10,-1,2,7,12,1,5,9].map(v=>`<i style="background:${COL[cls(v)]}"></i>`).join('');
+  app.innerHTML = `
+  <main class="home">
+    <h1 class="logo">Douze<span class="mini" aria-hidden="true">${dots}</span></h1>
+    <p class="tag">Douze cartes chacun, le plus petit total gagne. De 2 à 8 joueurs, chacun sur son téléphone.</p>
+    <label class="fld"><span>Ton pseudo</span><input id="nameIn" maxlength="14" autocomplete="nickname"></label>
+    <button id="createBtn" class="btn primary">Créer une partie</button>
+    <div class="or">ou rejoins avec un code</div>
+    <div class="join"><input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off"><button id="joinBtn" class="btn">Rejoindre</button></div>
+    <p class="err" id="err"></p>
+    <details class="rules"><summary>Règles en bref</summary>
+      <p>Chaque joueur a 12 cartes cachées en 3 lignes de 4. Au début, tu en retournes 2.</p>
+      <p>À ton tour : prends la carte de la défausse et échange-la avec une de tes cartes, ou pioche. Si tu pioches, tu échanges la carte ou tu la jettes et retournes une de tes cartes cachées.</p>
+      <p>Trois cartes identiques visibles dans une même colonne disparaissent.</p>
+      <p>Quand un joueur a tout retourné, les autres jouent un dernier tour. Si celui qui a fini n’a pas strictement le plus petit score de la manche, son score est doublé (s’il est positif).</p>
+      <p>La partie s’arrête quand quelqu’un atteint 100 points. Le plus petit total gagne.</p>
+      <p>Celui qui crée la partie doit garder la page ouverte jusqu’à la fin.</p>
+    </details>
+  </main>`;
+  document.getElementById('nameIn').value = myName;
+  const h = (location.hash||'').slice(1).toUpperCase();
+  if(/^[A-Z]{4}$/.test(h)) document.getElementById('codeIn').value = h;
+  if(homeMsg) showErr(homeMsg);
+  homeMsg = '';
+  document.getElementById('createBtn').onclick = createGame;
+  document.getElementById('joinBtn').onclick = joinGame;
+}
+function readName(){
+  const v = (document.getElementById('nameIn').value||'').trim().slice(0,14);
+  if(!v){ showErr('Choisis un pseudo.'); return null; }
+  myName = v; LS.set('douze-name', v); return v;
+}
+function showErr(m){ const e=document.getElementById('err'); if(e) e.textContent=m; }
+let toastT=null;
+function toast(m){
+  let t=document.querySelector('.toast'); if(!t){ t=document.createElement('div'); t.className='toast'; t.setAttribute('role','status'); document.body.appendChild(t); }
+  t.textContent=m; clearTimeout(toastT); toastT=setTimeout(()=>t.remove(),3500);
+}
+let prevS = null;
+function onState(s){
+  const me = s.players.findIndex(p=>p.id===myId);
+  if(prevS && me>=0 && s.status==='playing' && s.turn===me && (prevS.turn!==me || prevS.status!=='playing')){
+    try{ navigator.vibrate && navigator.vibrate(80); }catch(e){}
+  }
+  if(!isHost) S = s;
+  prevS = s;
+  render();
+}
+function render(){
+  if(!S) return;
+  const me = S.players.findIndex(p=>p.id===myId);
+  if(S.status==='lobby') return renderLobby(me);
+  const n = S.players.length;
+  const myTurn = me>=0 && S.status==='playing' && S.turn===me;
+  const P = me>=0 ? S.players[me] : null;
+  const deckCount = S.deck ? S.deck.length : (S.deckCount||0);
+
+  const seen = {};
+  const isFresh = (pid,i,c) => { const k=pid+':'+i; seen[k]=c.up?c.v:'x'; return c.up && lastSeen[k]!==undefined && lastSeen[k]!==c.v; };
+
+  const order = []; for(let k=1;k<=n;k++){ const j=((me<0?0:me)+k)%n; if(j!==me) order.push(j); }
+  const opps = order.map(j => {
+    const p = S.players[j]; const active = (S.status==='playing' && S.turn===j);
+    const cells = p.grid.map((c,i)=>cardHTML(c,{fresh:isFresh(p.id,i,c)})).join('');
+    return `<div class="opp${active?' active':''}"><div class="nm">${esc(p.name)}${S.finisher===j?' ✓':''}</div><div class="sc">visible ${visibleSum(p)} · total ${p.total}</div><div class="ogrid">${cells}</div></div>`;
+  }).join('');
+
+  const top = S.discard.length ? {v:S.discard[S.discard.length-1], up:true} : null;
+  const canDeck = myTurn && S.phase==='choose';
+  const canDiscard = myTurn && ((S.phase==='choose' && top) || S.phase==='drawn' || S.phase==='fromDiscard');
+  const discLabel = S.phase==='drawn' && myTurn ? 'Jeter ici' : S.phase==='fromDiscard' && myTurn ? 'Reposer' : 'Défausse';
+  const drawnHTML = (S.drawn!=null && S.status==='playing')
+    ? `<div class="pile">${cardHTML({v:S.drawn,up:true},{})}<span class="lbl">${S.phase==='fromDiscard'?'Prise':'Piochée'}</span></div>` : '';
+  const center = `
+    <section class="center">
+      <div class="pile">${cardHTML({v:0,up:false},{tap:canDeck, act:canDeck?'deck':null, label:'Pioche'})}<span class="lbl">Pioche · ${deckCount}</span></div>
+      <div class="pile">${cardHTML(top,{tap:canDiscard, act:canDiscard?'discard':null, label:discLabel})}<span class="lbl">${discLabel}</span></div>
+      ${drawnHTML}
+    </section>`;
+
+  let hint='', wait=false;
+  const cur = S.players[S.turn];
+  if(S.status==='setup'){
+    if(P && upCount(P)<2){ const k=2-upCount(P); hint = 'Retourne ' + k + ' carte' + (k>1?'s':'') + ' de ta grille.'; }
+    else { hint = 'En attente des autres joueurs…'; wait=true; }
+  } else if(S.status==='playing'){
+    if(myTurn){
+      hint = S.phase==='choose' ? 'Pioche, ou prends la carte de la défausse.'
+           : S.phase==='drawn' ? 'Échange-la avec une de tes cartes, ou jette-la sur la défausse.'
+           : S.phase==='fromDiscard' ? 'Choisis la carte de ta grille à remplacer.'
+           : 'Retourne une de tes cartes cachées.';
+    } else {
+      wait = true;
+      hint = 'Au tour de ' + (cur?cur.name:'…') + (S.phase==='drawn'?' (a pioché)':S.phase==='mustFlip'?' (retourne une carte)':'') + '.';
+    }
+  }
+  const banner = (S.status==='playing' && S.finisher!=null) ? `<div class="banner">Dernier tour ! ${esc(S.players[S.finisher].name)} a tout retourné.</div>` : '';
+  const log = S.log && S.status!=='roundEnd' && S.status!=='over' ? `<p class="hint wait" style="font-size:14px">${esc(S.log)}</p>` : '';
+
+  let mine = '';
+  if(P){
+    const cells = P.grid.map((c,i) => {
+      let tap=false;
+      if(!c.gone){
+        if(S.status==='setup') tap = !c.up && upCount(P)<2;
+        else if(myTurn && (S.phase==='drawn'||S.phase==='fromDiscard')) tap = true;
+        else if(myTurn && S.phase==='mustFlip') tap = !c.up;
+      }
+      return cardHTML(c,{tap, act:tap?'card':null, i, fresh:isFresh(P.id,i,c)});
+    }).join('');
+    mine = `<section class="mine${myTurn?' myturn':''}"><div class="head"><b>${esc(P.name)}</b><span>visible ${visibleSum(P)} · total ${P.total}</span></div><div class="mgrid">${cells}</div></section>`;
+  }
+
+  let sheet='';
+  if(S.status==='roundEnd' || S.status==='over'){
+    const rows = S.players.map((p,i)=>({p,i,r:(S.lastScores||[])[i]})).sort((a,b)=>a.p.total-b.p.total);
+    const best = rows[0].p.total;
+    const nWin = rows.filter(x=>x.p.total===best).length;
+    const tr = rows.map(x=>`<tr class="${S.status==='over'&&x.p.total===best?'win':''}"><td>${esc(x.p.name)}${x.i===me?' (toi)':''}</td><td>${x.r!=null?x.r:''}${S.doubled===x.i?' ×2':''}</td><td>${x.p.total}</td></tr>`).join('');
+    const dbl = S.doubled!=null ? `<p class="note">Le score de ${esc(S.players[S.doubled].name)} est doublé : il a fini sans avoir le plus petit score.</p>` : '';
+    const winners = rows.filter(x=>x.p.total===best).map(x=>esc(x.p.name)).join(' et ');
+    sheet = `<section class="sheet"><h2>${S.status==='over' ? winners + (nWin>1?' gagnent':' gagne') : 'Fin de la manche ' + S.round}</h2>
+      <table><thead><tr><th>Joueur</th><th>Manche</th><th>Total</th></tr></thead><tbody>${tr}</tbody></table>${dbl}
+      ${S.status==='over' ? `<button class="btn primary" data-act="replay">Rejouer</button>` : `<button class="btn primary" data-act="next">Manche suivante</button>`}</section>`;
+  }
+
+  app.innerHTML = `
+    <header class="bar"><button class="iconbtn" data-act="leave">Quitter</button>
+      <span class="grow"></span><span class="small">Manche ${S.round}</span><span class="code">${esc(S.code)}</span></header>
+    <div class="banner" id="netb" hidden></div>
+    ${sheet}
+    <section class="opps" aria-label="Autres joueurs">${opps}</section>
+    ${center}
+    ${banner}
+    <p class="hint${wait?' wait':''}" aria-live="polite">${esc(hint)}</p>
+    ${mine}
+    ${log}`;
+  lastSeen = seen;
+}
+function renderLobby(me){
+  const list = S.players.map(p=>`<li><span>${esc(p.name)}</span>${p.id===myId?'<span class="you">toi</span>':''}</li>`).join('');
+  app.innerHTML = `
+  <main class="lobby">
+    <p class="muted" style="margin:0">Code de la partie</p>
+    <div class="bigcode">${esc(S.code)}</div>
+    <p class="muted" style="margin:0">Les autres joueurs ouvrent ce même lien et entrent ce code.</p>
+    <div class="banner" id="netb" hidden></div>
+    <ul class="plist">${list}</ul>
+    ${S.players.length>=2 ? `<button class="btn primary" data-act="start">Lancer la partie (${S.players.length} joueurs)</button>` : `<p class="muted">En attente d’au moins un autre joueur…</p>`}
+    ${isHost ? `<p class="muted" style="font-size:14px">Garde cette page ouverte jusqu’à la fin de la partie.</p>` : ''}
+    <button class="btn" data-act="quitlobby">Quitter</button>
+  </main>`;
+}
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const a = b.dataset.act;
+  if(a==='cancel'){ leave(); return; }
+  if(a==='leave'){
+    const msg = isHost ? 'Quitter ? La partie s’arrêtera pour tout le monde.' : 'Quitter cette partie ?';
+    if(confirm(msg)) leave();
+    return;
+  }
+  if(a==='quitlobby'){ if(!isHost && conn && conn.open){ try{ conn.send({t:'leave'}); }catch(x){} } leave(); return; }
+  sendAction(a, b.dataset.i!=null ? +b.dataset.i : null);
+});
+
+/* ---------- Démarrage ---------- */
+function init(){
+  if(typeof Peer==='undefined'){ renderHome(); showErr('Le module réseau n’a pas pu se charger. Vérifie ta connexion et recharge la page.'); return; }
+  const h = LS.get('douze-host');
+  if(h){ try{ const s = JSON.parse(h); if(s && s.code && s.players && s.players.some(p=>p.id===myId)){ startHost(s.code, s, 0); return; } }catch(e){} LS.del('douze-host'); }
+  const c = LS.get('douze-client');
+  if(c && myName){ startClient(c); return; }
+  renderHome();
+}
+init();
+})();
+</script>
+</body>
+</html>
