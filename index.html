@@ -126,6 +126,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .sheet .note{font-size:14px;color:var(--muted);margin:10px 0}
 .sheet .btn{width:100%;margin-top:6px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:20;max-width:90vw}
+.opp.active .nm{color:var(--accent)}
+.ogrid .card{--w:var(--ow,22px);font-size:calc(var(--w)*.48)}
+.dots{display:inline-flex;gap:3px;margin-left:6px;vertical-align:middle}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);opacity:.3}
+@media (prefers-reduced-motion: no-preference){.dots i{animation:blink 1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}}
+@keyframes blink{40%{opacity:1}}
+.modal{position:fixed;inset:0;background:rgba(4,14,12,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px;z-index:30}
+.modal .box{width:100%;max-width:420px;background:var(--surface);border-radius:22px;padding:20px 18px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px}
+.modal h2{font-family:Fredoka,system-ui,sans-serif;font-weight:600;margin:0 0 4px;font-size:24px}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:2px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 0;font-weight:600;cursor:pointer;font-family:Fredoka,system-ui,sans-serif;font-size:16px}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.plist .rm{border:none;background:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0 4px}
 </style>
 </head>
 <body>
@@ -146,6 +159,7 @@ let myId = LS.get('douze-id');
 if(!myId){ myId = 'p' + Math.random().toString(36).slice(2,12); LS.set('douze-id', myId); }
 let myName = LS.get('douze-name') || '';
 
+let solo = false;
 let peer = null, isHost = false, S = null, code = null, homeMsg = '';
 let conns = new Map();          // hôte : connexion -> id joueur
 let conn = null, retryT = null, gotState = false, joinTimer = null; // client
@@ -161,7 +175,7 @@ function newDeck(){
   for(let v=1;v<=12;v++) for(let i=0;i<10;i++) d.push(v);
   return shuffle(d);
 }
-function mkPlayer(id,name){ return {id, name, grid:[], total:0, rounds:[]}; }
+function mkPlayer(id,name,bot,lvl){ return {id, name, grid:[], total:0, rounds:[], bot:!!bot, lvl:lvl||null}; }
 function newGame(c,name){
   return {code:c, status:'lobby', round:0, players:[mkPlayer(myId,name)], deck:[], discard:[],
     turn:0, phase:null, drawn:null, finisher:null, lastLeft:0, nextStarter:null, log:'', lastScores:null, doubled:null, v:0};
@@ -226,6 +240,8 @@ function applyAction(s, me, a, i){
     case 'start': if(s.status!=='lobby' || s.players.length<2) return false; deal(s); return true;
     case 'next': if(s.status!=='roundEnd') return false; deal(s); return true;
     case 'replay': if(s.status!=='over') return false; s.players.forEach(p=>{p.total=0;p.rounds=[];}); s.round=0; s.nextStarter=null; deal(s); return true;
+    case 'addbot': if(s.status!=='lobby' || me!==0 || s.players.length>=8) return false; addBot(s, i||'medium'); return true;
+    case 'rmbot': { if(s.status!=='lobby' || me!==0) return false; const k=s.players.findIndex(q=>q.id===i && q.bot); if(k<0) return false; s.players.splice(k,1); return true; }
     case 'card': {
       const p = s.players[me]; const c = p.grid[i]; if(!c || c.gone) return false;
       if(s.status==='setup'){ if(c.up || upCount(p)>=2) return false; c.up = true; startPlayIfReady(s); return true; }
@@ -255,14 +271,208 @@ function applyAction(s, me, a, i){
   return false;
 }
 
+/* ---------- Robots ---------- */
+const BOTNAMES = ['Margaux','Théo','Inès','Hugo','Léa','Nathan','Chloé'];
+const LV = {
+  easy:   {noise:2.2, count:0, pot:0,    margin:-99, tempo:0.15, give:0,    look:false},
+  medium: {noise:1.0, count:1, pot:0.25, margin:1,   tempo:0.45, give:0.25, look:false},
+  hard:   {noise:0.4, count:2, pot:0.45, margin:2.5, tempo:0.6,  give:0.45, look:true}
+};
+const LVNAME = {easy:'Facile', medium:'Moyen', hard:'Fort'};
+const LVDESC = {
+  easy:'Joue au feeling et fait des erreurs.',
+  medium:'Joue correctement et retient les dernières cartes jetées.',
+  hard:'Compte les cartes, construit ses colonnes et ne ferme la manche que s’il pense gagner.'
+};
+function addBot(s,lvl){
+  const used = new Set(s.players.map(p=>p.name));
+  const name = BOTNAMES.find(n=>!used.has(n)) || ('Robot '+s.players.length);
+  s.players.push(mkPlayer('bot-'+Math.random().toString(36).slice(2,8), name, true, LV[lvl]?lvl:'medium'));
+}
+function gauss(){ let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+const FULLC = (()=>{ const m={'-2':5,'-1':10,'0':15}; for(let v=1;v<=12;v++) m[v]=10; return m; })();
+// Le robot ne voit que ce qu'un humain voit : cartes retournées et défausse.
+function unseen(s,L){
+  const cnt = Object.assign({}, FULLC);
+  if(L.count===0) return cnt;
+  s.players.forEach(p=>p.grid.forEach(c=>{ if(c.up && !c.gone) cnt[c.v]--; }));
+  (L.count===2 ? s.discard : s.discard.slice(-3)).forEach(v=>cnt[v]--);
+  if(s.drawn!=null) cnt[s.drawn]--;
+  for(const k in cnt) if(cnt[k]<0) cnt[k]=0;
+  return cnt;
+}
+function meanCnt(cnt){ let t=0,n=0; for(const k in cnt){ t+=(+k)*cnt[k]; n+=cnt[k]; } return n ? t/n : 5; }
+function totalCnt(cnt){ let n=0; for(const k in cnt) n+=cnt[k]; return n||1; }
+function colScore(cells,C,L){
+  const live = cells.filter(c=>!c.gone); if(!live.length) return 0;
+  const up = live.filter(c=>c.up);
+  if(up.length===3 && up[0].v===up[1].v && up[1].v===up[2].v) return 0;
+  let sum=0; live.forEach(c=>sum += c.up ? c.v : C.E);
+  if(L.pot && up.length>=2 && live.length===3 && !C.last){
+    const v = up.map(c=>c.v); let a=null;
+    if(v[0]===v[1]) a=v[0]; else if(v.length===3 && (v[0]===v[2] || v[1]===v[2])) a=v[2];
+    if(a!==null && a>0){ const q=(C.cnt[a]||0)/C.tot; const p=1-Math.pow(1-q,6); sum -= L.pot*p*Math.max(0,sum); }
+  }
+  return sum;
+}
+function gridScore(g,C,L){ let t=0; for(let c=0;c<4;c++) t+=colScore([g[c],g[c+4],g[c+8]],C,L); return t; }
+function exactSum(g){
+  let t=0;
+  for(let c=0;c<4;c++){
+    const col=[g[c],g[c+4],g[c+8]].filter(x=>!x.gone);
+    if(col.length===3 && col.every(x=>x.up) && col[0].v===col[1].v && col[1].v===col[2].v) continue;
+    col.forEach(x=>t += x.up ? x.v : 0);
+  }
+  return t;
+}
+function estSum(grid,C){ return grid.reduce((a,c)=>a+(c.gone?0:(c.up?c.v:C.E)),0); }
+function ctxFor(s,me,L){
+  const cnt = unseen(s,L);
+  const C = {cnt, tot:totalCnt(cnt), E: L.count===0 ? 5 : meanCnt(cnt), last: s.finisher!=null};
+  let oppMin = Infinity;
+  s.players.forEach((q,j)=>{
+    if(j===me) return;
+    const hid = q.grid.filter(c=>!c.up && !c.gone).length;
+    oppMin = Math.min(oppMin, estSum(q.grid,C) - (C.last ? 0 : (hid>0 ? 2 : 1)));
+  });
+  C.oppMin = oppMin;
+  C.ahead = estSum(s.players[me].grid,C) < oppMin;
+  return C;
+}
+const isDone = g => g.every(c=>c.gone || c.up);
+function finishBonus(mine,C,L){
+  const ok = mine<=0 || mine < C.oppMin - L.margin;
+  return ok ? 3 + Math.max(0,(C.oppMin-mine)/3) : -30 - Math.max(0, mine-C.oppMin);
+}
+function givePen(v,L){ return v<=0 ? L.give*(3-v) : v<=3 ? L.give*0.6 : 0; }
+function placeOpts(s,me,x,C,L){
+  const p=s.players[me], out=[];
+  p.grid.forEach((c,i)=>{
+    if(c.gone) return;
+    const ng=p.grid.slice(); ng[i]={v:x, up:true, gone:false};
+    let v = gridScore(p.grid,C,L) - gridScore(ng,C,L);
+    if(!C.last){
+      if(!c.up) v += C.ahead ? L.tempo : -L.tempo*0.4;
+      if(isDone(ng)) v += finishBonus(exactSum(ng),C,L);
+    }
+    if(c.up) v -= givePen(c.v,L);
+    out.push({i, v, kind:'swap'});
+  });
+  return out;
+}
+function flipOpts(s,me,x,C,L){
+  const p=s.players[me], out=[];
+  const hidden = p.grid.filter(c=>!c.up && !c.gone).length;
+  p.grid.forEach((c,i)=>{
+    if(c.gone || c.up) return;
+    let v = C.last ? 0 : (C.ahead ? L.tempo : -L.tempo*0.4);
+    const col=i%4, idx=[col,col+4,col+8].filter(k=>k!==i), others=idx.map(k=>p.grid[k]);
+    if(others.every(q=>q.up && !q.gone) && others[0].v===others[1].v){
+      const a=others[0].v; v += ((C.cnt[a]||0)/C.tot) * (2*a + C.E);
+    }
+    if(!C.last && hidden===1) v += finishBonus(estSum(p.grid,C),C,L);
+    if(x!=null) v -= givePen(x,L);
+    out.push({i, v, kind:'flip'});
+  });
+  return out;
+}
+function pick(opts,noise){ let b=null; opts.forEach(o=>{ const n=o.v+gauss()*noise; if(!b || n>b.n) b=Object.assign({},o,{n}); }); return b; }
+function gapOf(opts){ const v=opts.map(o=>o.v).sort((a,b)=>b-a); return v.length>1 ? v[0]-v[1] : 9; }
+const rnd = (a,b) => a + Math.random()*(b-a);
+function botPlan(s,me){
+  const p=s.players[me]; const L=LV[p.lvl] || LV.medium; const C=ctxFor(s,me,L);
+  if(s.phase==='choose'){
+    const d = s.discard.length ? s.discard[s.discard.length-1] : null;
+    let valA = d!=null ? Math.max(...placeOpts(s,me,d,C,L).map(o=>o.v)) : -Infinity;
+    let valB;
+    if(L.look){
+      let t=0;
+      for(const k in C.cnt){
+        const n=C.cnt[k]; if(!n) continue; const x=+k;
+        const all=placeOpts(s,me,x,C,L).concat(flipOpts(s,me,x,C,L));
+        t += n*Math.max(...all.map(o=>o.v));
+      }
+      valB = t/C.tot;
+    } else valB = (L.count===0 ? 1.5 : 1.0) + (C.last ? 0.5 : 0);
+    if(d!=null && d<=0) valA += 0.5;
+    const close = Math.abs(valA-valB) < 1;
+    const takeIt = valA + gauss()*L.noise > valB + gauss()*L.noise*0.6;
+    return {a: takeIt ? 'discard' : 'deck', delay: rnd(900,1700) + (close ? rnd(500,1300) : 0)};
+  }
+  if(s.phase==='fromDiscard'){
+    const b=pick(placeOpts(s,me,s.drawn,C,L), L.noise);
+    return {a:'card', i:b.i, delay:rnd(700,1300)};
+  }
+  if(s.phase==='drawn'){
+    const all=placeOpts(s,me,s.drawn,C,L).concat(flipOpts(s,me,s.drawn,C,L));
+    const b=pick(all, L.noise);
+    const delay = rnd(1000,1900) + (gapOf(all)<0.8 ? rnd(400,1100) : 0);
+    return b.kind==='swap' ? {a:'card', i:b.i, delay} : {a:'discard', delay};
+  }
+  if(s.phase==='mustFlip'){
+    const b=pick(flipOpts(s,me,null,C,L), L.noise);
+    return {a:'card', i:b.i, delay:rnd(500,1000)};
+  }
+  return null;
+}
+let botT=null, setupT={};
+function clearBots(){ clearTimeout(botT); botT=null; for(const k in setupT) clearTimeout(setupT[k]); setupT={}; }
+function scheduleBots(){
+  clearTimeout(botT); botT=null;
+  if(!isHost || !S) return;
+  if(S.status==='setup'){
+    S.players.forEach(p=>{
+      if(p.bot && upCount(p)<2 && !setupT[p.id])
+        setupT[p.id]=setTimeout(()=>{ delete setupT[p.id]; botSetup(p.id); }, rnd(800,2600));
+    });
+    return;
+  }
+  if(S.status!=='playing') return;
+  const cur=S.players[S.turn]; if(!cur || !cur.bot) return;
+  const plan=botPlan(S,S.turn); if(!plan) return;
+  const v=S.v, pid=cur.id;
+  botT=setTimeout(()=>{ botT=null; if(!S || S.v!==v) return scheduleBots(); hostAction(pid, plan.a, plan.i); }, plan.delay);
+}
+function botSetup(pid){
+  if(!S || S.status!=='setup') return;
+  const p=S.players.find(q=>q.id===pid); if(!p || upCount(p)>=2) return;
+  const hid=p.grid.map((c,i)=>i).filter(i=>!p.grid[i].up);
+  const firstUp=p.grid.findIndex(c=>c.up);
+  let i;
+  if(firstUp>=0 && Math.random()<0.5){
+    const col=firstUp%4; const cand=[col,col+4,col+8].filter(k=>!p.grid[k].up);
+    i=cand[Math.floor(Math.random()*cand.length)];
+  } else i=hid[Math.floor(Math.random()*hid.length)];
+  hostAction(pid,'card',i);
+}
+function startSolo(n,lvl,restored){
+  isHost=true; solo=true; code='SOLO'; peer=null;
+  if(restored) S=restored;
+  else { S=newGame('SOLO',myName); for(let k=0;k<n;k++) addBot(S,lvl); deal(S); }
+  lastSeen={}; commit();
+}
+let soloCfg={n:2, lvl:'medium'};
+function openSolo(){
+  const m=document.createElement('div'); m.className='modal'; m.id='modal';
+  m.innerHTML=`<div class="box" role="dialog" aria-modal="true" aria-label="Partie contre des robots"><h2>Contre des robots</h2>
+    <div class="muted">Nombre d’adversaires</div>
+    <div class="seg">${[1,2,3,4,5].map(k=>`<button data-act="solon" data-n="${k}" aria-pressed="${soloCfg.n===k}">${k}</button>`).join('')}</div>
+    <div class="muted">Niveau</div>
+    <div class="seg">${['easy','medium','hard'].map(l=>`<button data-act="sololvl" data-l="${l}" aria-pressed="${soloCfg.lvl===l}">${LVNAME[l]}</button>`).join('')}</div>
+    <p class="muted" id="lvldesc" style="margin:0;font-size:14px">${LVDESC[soloCfg.lvl]}</p>
+    <button class="btn primary" data-act="solostart">Lancer la partie</button>
+    <button class="btn" data-act="closemodal">Annuler</button></div>`;
+  app.appendChild(m);
+}
+
 /* ---------- Réseau : hôte ---------- */
 function publicState(){ const p = Object.assign({}, S); p.deckCount = S.deck.length; delete p.deck; return p; }
 function broadcast(){
   const msg = {t:'state', s:publicState()};
   conns.forEach((pid,c) => { if(c.open) try{ c.send(msg); }catch(e){} });
 }
-function saveHost(){ LS.set('douze-host', JSON.stringify(S)); }
-function commit(){ S.v = (S.v||0)+1; saveHost(); broadcast(); onState(S); }
+function saveHost(){ LS.set(solo?'douze-solo':'douze-host', JSON.stringify(S)); }
+function commit(){ S.v = (S.v||0)+1; saveHost(); if(!solo) broadcast(); onState(S); scheduleBots(); }
 function hostAction(pid, a, i){
   const me = S.players.findIndex(p=>p.id===pid); if(me<0) return;
   const s = JSON.parse(JSON.stringify(S));
@@ -285,7 +495,7 @@ function onHostData(c, d){
     return;
   }
   const pid = conns.get(c); if(!pid) return;
-  if(d.t==='act') hostAction(pid, String(d.a), d.i==null?null:+d.i);
+  if(d.t==='act'){ const a=String(d.a); if(a==='addbot'||a==='rmbot') return; hostAction(pid, a, d.i==null?null:+d.i); }
   if(d.t==='leave' && S.status==='lobby'){ S.players = S.players.filter(p=>p.id!==pid); conns.delete(c); commit(); }
 }
 function startHost(c, restored, tries){
@@ -374,10 +584,11 @@ function joinGame(){
   startClient(c);
 }
 function leave(msg){
-  clearTimeout(retryT); clearTimeout(joinTimer);
-  if(isHost && conns.size){ conns.forEach((pid,c)=>{ try{ c.send({t:'closed'}); }catch(e){} }); }
+  clearTimeout(retryT); clearTimeout(joinTimer); clearBots();
+  if(isHost && !solo && conns.size){ conns.forEach((pid,c)=>{ try{ c.send({t:'closed'}); }catch(e){} }); }
   setTimeout(() => { try{ peer && peer.destroy(); }catch(e){} peer=null; }, isHost ? 300 : 0);
-  if(isHost) LS.del('douze-host'); else LS.del('douze-client');
+  if(solo) LS.del('douze-solo'); else if(isHost) LS.del('douze-host'); else LS.del('douze-client');
+  solo = false; const mo=document.getElementById('modal'); if(mo) mo.remove();
   conns = new Map(); conn = null; S = null; code = null; isHost = false; gotState = false; lastSeen = {};
   homeMsg = msg || '';
   renderHome();
@@ -407,7 +618,8 @@ function renderHome(){
     <h1 class="logo">Douze<span class="mini" aria-hidden="true">${dots}</span></h1>
     <p class="tag">Douze cartes chacun, le plus petit total gagne. De 2 à 8 joueurs, chacun sur son téléphone.</p>
     <label class="fld"><span>Ton pseudo</span><input id="nameIn" maxlength="14" autocomplete="nickname"></label>
-    <button id="createBtn" class="btn primary">Créer une partie</button>
+    <button class="btn primary" data-act="solo">Jouer contre des robots</button>
+    <button id="createBtn" class="btn">Créer une partie en ligne</button>
     <div class="or">ou rejoins avec un code</div>
     <div class="join"><input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off"><button id="joinBtn" class="btn">Rejoindre</button></div>
     <p class="err" id="err"></p>
@@ -462,10 +674,12 @@ function render(){
   const isFresh = (pid,i,c) => { const k=pid+':'+i; seen[k]=c.up?c.v:'x'; return c.up && lastSeen[k]!==undefined && lastSeen[k]!==c.v; };
 
   const order = []; for(let k=1;k<=n;k++){ const j=((me<0?0:me)+k)%n; if(j!==me) order.push(j); }
+  const ow = order.length===1 ? 34 : order.length===2 ? 30 : order.length===3 ? 20 : 22;
   const opps = order.map(j => {
     const p = S.players[j]; const active = (S.status==='playing' && S.turn===j);
+    const thinking = p.bot && (active || (S.status==='setup' && upCount(p)<2));
     const cells = p.grid.map((c,i)=>cardHTML(c,{fresh:isFresh(p.id,i,c)})).join('');
-    return `<div class="opp${active?' active':''}"><div class="nm">${esc(p.name)}${S.finisher===j?' ✓':''}</div><div class="sc">visible ${visibleSum(p)} · total ${p.total}</div><div class="ogrid">${cells}</div></div>`;
+    return `<div class="opp${active?' active':''}" style="--ow:${ow}px"><div class="nm">${p.bot?'🤖 ':''}${esc(p.name)}${S.finisher===j?' ✓':''}${thinking?'<span class="dots" aria-label="réfléchit"><i></i><i></i><i></i></span>':''}</div><div class="sc">visible ${visibleSum(p)} · total ${p.total}</div><div class="ogrid">${cells}</div></div>`;
   }).join('');
 
   const top = S.discard.length ? {v:S.discard[S.discard.length-1], up:true} : null;
@@ -494,7 +708,9 @@ function render(){
            : 'Retourne une de tes cartes cachées.';
     } else {
       wait = true;
-      hint = 'Au tour de ' + (cur?cur.name:'…') + (S.phase==='drawn'?' (a pioché)':S.phase==='mustFlip'?' (retourne une carte)':'') + '.';
+      hint = cur && cur.bot
+        ? cur.name + (S.phase==='drawn' ? ' regarde la carte piochée…' : S.phase==='fromDiscard' ? ' place la carte de la défausse…' : S.phase==='mustFlip' ? ' choisit une carte à retourner…' : ' réfléchit…')
+        : 'Au tour de ' + (cur?cur.name:'…') + (S.phase==='drawn'?' (a pioché)':S.phase==='mustFlip'?' (retourne une carte)':'') + '.';
     }
   }
   const banner = (S.status==='playing' && S.finisher!=null) ? `<div class="banner">Dernier tour ! ${esc(S.players[S.finisher].name)} a tout retourné.</div>` : '';
@@ -529,7 +745,7 @@ function render(){
 
   app.innerHTML = `
     <header class="bar"><button class="iconbtn" data-act="leave">Quitter</button>
-      <span class="grow"></span><span class="small">Manche ${S.round}</span><span class="code">${esc(S.code)}</span></header>
+      <span class="grow"></span><span class="small">Manche ${S.round}</span>${solo?'':`<span class="code">${esc(S.code)}</span>`}</header>
     <div class="banner" id="netb" hidden></div>
     ${sheet}
     <section class="opps" aria-label="Autres joueurs">${opps}</section>
@@ -541,7 +757,7 @@ function render(){
   lastSeen = seen;
 }
 function renderLobby(me){
-  const list = S.players.map(p=>`<li><span>${esc(p.name)}</span>${p.id===myId?'<span class="you">toi</span>':''}</li>`).join('');
+  const list = S.players.map(p=>`<li><span>${p.bot?'🤖 ':''}${esc(p.name)}</span>${p.bot && me===0 ? `<button class="rm" data-act="rmbot" data-id="${esc(p.id)}" aria-label="Retirer ${esc(p.name)}">×</button>` : p.id===myId?'<span class="you">toi</span>':''}</li>`).join('');
   app.innerHTML = `
   <main class="lobby">
     <p class="muted" style="margin:0">Code de la partie</p>
@@ -549,6 +765,7 @@ function renderLobby(me){
     <p class="muted" style="margin:0">Les autres joueurs ouvrent ce même lien et entrent ce code.</p>
     <div class="banner" id="netb" hidden></div>
     <ul class="plist">${list}</ul>
+    ${me===0 && S.players.length<8 ? `<button class="btn" data-act="addbot">Ajouter un robot</button>` : ''}
     ${S.players.length>=2 ? `<button class="btn primary" data-act="start">Lancer la partie (${S.players.length} joueurs)</button>` : `<p class="muted">En attente d’au moins un autre joueur…</p>`}
     ${isHost ? `<p class="muted" style="font-size:14px">Garde cette page ouverte jusqu’à la fin de la partie.</p>` : ''}
     <button class="btn" data-act="quitlobby">Quitter</button>
@@ -559,8 +776,15 @@ app.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   const a = b.dataset.act;
   if(a==='cancel'){ leave(); return; }
+  if(a==='solo'){ if(readName()) openSolo(); return; }
+  if(a==='solon'){ soloCfg.n=+b.dataset.n; b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); return; }
+  if(a==='sololvl'){ soloCfg.lvl=b.dataset.l; b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b)); const d=document.getElementById('lvldesc'); if(d) d.textContent=LVDESC[soloCfg.lvl]; return; }
+  if(a==='solostart'){ const m=document.getElementById('modal'); if(m) m.remove(); startSolo(soloCfg.n, soloCfg.lvl); return; }
+  if(a==='closemodal'){ const m=document.getElementById('modal'); if(m) m.remove(); return; }
+  if(a==='rmbot'){ sendAction('rmbot', b.dataset.id); return; }
+  if(a==='addbot'){ sendAction('addbot', 'medium'); return; }
   if(a==='leave'){
-    const msg = isHost ? 'Quitter ? La partie s’arrêtera pour tout le monde.' : 'Quitter cette partie ?';
+    const msg = solo ? 'Quitter la partie contre les robots ?' : isHost ? 'Quitter ? La partie s’arrêtera pour tout le monde.' : 'Quitter cette partie ?';
     if(confirm(msg)) leave();
     return;
   }
@@ -570,6 +794,8 @@ app.addEventListener('click', e => {
 
 /* ---------- Démarrage ---------- */
 function init(){
+  const so = LS.get('douze-solo');
+  if(so){ try{ const s=JSON.parse(so); if(s && s.players && s.players[0] && s.players[0].id===myId){ startSolo(0,null,s); return; } }catch(e){} LS.del('douze-solo'); }
   if(typeof Peer==='undefined'){ renderHome(); showErr('Le module réseau n’a pas pu se charger. Vérifie ta connexion et recharge la page.'); return; }
   const h = LS.get('douze-host');
   if(h){ try{ const s = JSON.parse(h); if(s && s.code && s.players && s.players.some(p=>p.id===myId)){ startHost(s.code, s, 0); return; } }catch(e){} LS.del('douze-host'); }
